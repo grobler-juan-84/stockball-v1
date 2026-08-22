@@ -49,3 +49,7 @@ def session_scope() -> Generator[Session, None, None]:
         raise
     finally:
         session.close()
+
+
+# Ensure model modules register tables on Base.metadata for Alembic.
+from moneyball.db.models import TradingDay as TradingDay  # noqa: E402, F401

@@ -17,6 +17,7 @@ if str(SRC) not in sys.path:
 
 from moneyball.config import get_settings  # noqa: E402
 from moneyball.db import Base  # noqa: E402
+from moneyball.db import models as _models  # noqa: E402, F401
 
 config = context.config
 

@@ -1,7 +1,6 @@
 """Data provider adapters.
 
 Fetching stays isolated from transforms and database loading.
-Concrete providers (e.g. tiingo, fred) will be added as needed.
 """
 
 from __future__ import annotations

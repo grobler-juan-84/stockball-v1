@@ -27,9 +27,9 @@ class Settings:
 
 
 def _load_dotenv() -> None:
-    """Load `.env` from the repository root if present."""
-    env_path = REPO_ROOT / ".env"
-    load_dotenv(dotenv_path=env_path, override=False)
+    """Load `.env` then `.env.local` from the repository root if present."""
+    load_dotenv(dotenv_path=REPO_ROOT / ".env", override=False)
+    load_dotenv(dotenv_path=REPO_ROOT / ".env.local", override=True)
 
 
 @lru_cache(maxsize=1)

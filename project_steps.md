@@ -47,3 +47,7 @@ Nullified January 1993 `trading_day_of_*` counters; added `TradingDay` model, Al
 ## Step 11 — Null trading_day_of_year for all of 1993
 
 Corrected derivation so `trading_day_of_year` is null throughout 1993 (valid from 1994); `trading_day_of_month` remains null only for January 1993. Reloaded PostgreSQL, tests updated. Marked `trading_days` V1 complete.
+
+## Step 12 — Commit and push trading_days V1
+
+Committed and pushed `trading_days` V1 work to GitHub (`1da1cdc`), including Tiingo fetch/derive/validate, Alembic migration, PostgreSQL upsert loader, tests, and project-steps rule. Secrets in `.env.local` were not committed.

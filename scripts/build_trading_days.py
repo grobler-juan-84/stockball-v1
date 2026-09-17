@@ -1,10 +1,10 @@
 """Build, validate, and load MoneyBall DB `trading_days` into PostgreSQL.
 
-Flow: Tiingo fetch → extract dates → derive → validate → upsert.
+Flow: NYSE calendar -> extract sessions -> derive -> validate -> load.
 
 Usage:
-  python scripts/build_trading_days.py
-  python scripts/build_trading_days.py --end-date 2024-12-31
+  python scripts/build_trading_days.py --replace
+  python scripts/build_trading_days.py --end-date 2024-12-31 --replace
   python scripts/build_trading_days.py --skip-db
 """
 
@@ -27,21 +27,20 @@ from moneyball.config import ConfigurationError  # noqa: E402
 from moneyball.db import session_scope  # noqa: E402
 from moneyball.db.load_trading_days import upsert_trading_days  # noqa: E402
 from moneyball.db.models import TradingDay  # noqa: E402
-from moneyball.providers.tiingo import (  # noqa: E402
-    SPY_TRADING_CALENDAR_START,
-    TiingoError,
-    extract_trading_dates,
-    fetch_daily_prices,
+from moneyball.providers.nyse_calendar import (  # noqa: E402
+    NYSE_CALENDAR_START,
+    NyseCalendarError,
+    fetch_nyse_sessions,
 )
 from moneyball.transforms.trading_days import derive_trading_days  # noqa: E402
 from moneyball.validation.trading_days import (  # noqa: E402
     validate_trading_days,
 )
 
-SYMBOL = "SPY"
 VERIFY_DATES = [
+    date(1957, 1, 2),
+    date(1957, 1, 31),
     date(1993, 1, 29),
-    date(1993, 2, 1),
     date(2000, 1, 31),
     date(2020, 3, 31),
     date(2024, 12, 31),
@@ -90,20 +89,40 @@ def _print_db_verification() -> None:
                 """
             )
         ).scalar_one()
+        null_tdom_1993 = session.execute(
+            text(
+                """
+                SELECT COUNT(*) FROM trading_days
+                WHERE year = 1993 AND trading_day_of_month IS NULL
+                """
+            )
+        ).scalar_one()
+        null_tdoy_1993 = session.execute(
+            text(
+                """
+                SELECT COUNT(*) FROM trading_days
+                WHERE year = 1993 AND trading_day_of_year IS NULL
+                """
+            )
+        ).scalar_one()
 
         print(f"Total rows:          {total}")
         print(f"Earliest date:       {earliest}")
         print(f"Latest date:         {latest}")
         print(f"Duplicate PK groups: {dupes}")
+        print(f"1993 null tdom rows: {null_tdom_1993}")
+        print(f"1993 null tdoy rows: {null_tdoy_1993}")
 
         first5 = session.scalars(
             select(TradingDay).order_by(TradingDay.date.asc()).limit(5)
         ).all()
-        last5 = session.scalars(
-            select(TradingDay).order_by(TradingDay.date.desc()).limit(5)
-        ).all()
-        # reverse last5 for chronological display
-        last5 = list(reversed(last5))
+        last5 = list(
+            reversed(
+                session.scalars(
+                    select(TradingDay).order_by(TradingDay.date.desc()).limit(5)
+                ).all()
+            )
+        )
 
         print("\n--- First 5 rows ---")
         for row in first5:
@@ -123,13 +142,18 @@ def _print_db_verification() -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Derive, validate, and load MoneyBall trading_days."
+        description="Derive, validate, and load MoneyBall trading_days from NYSE calendar."
     )
     parser.add_argument(
         "--end-date",
         type=_parse_date,
         default=None,
-        help="Inclusive data cutoff (YYYY-MM-DD). Omit for latest Tiingo data.",
+        help="Inclusive data cutoff (YYYY-MM-DD). Omit for today UTC.",
+    )
+    parser.add_argument(
+        "--replace",
+        action="store_true",
+        help="TRUNCATE trading_days before load so the table matches the dataset.",
     )
     parser.add_argument(
         "--skip-db",
@@ -138,24 +162,22 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    print("=== MoneyBall trading_days build ===")
-    print(f"Symbol:                 {SYMBOL}")
-    print(f"Start date (requested): {SPY_TRADING_CALENDAR_START.isoformat()}")
+    print("=== MoneyBall trading_days build (NYSE) ===")
+    print(f"Calendar start (requested): {NYSE_CALENDAR_START.isoformat()}")
     print(
-        f"End date (requested):   "
-        f"{args.end_date.isoformat() if args.end_date else 'latest available'}"
+        f"End date (requested):       "
+        f"{args.end_date.isoformat() if args.end_date else 'today (UTC)'}"
     )
+    print(f"Replace mode:               {args.replace}")
 
     try:
-        rows = fetch_daily_prices(
-            SYMBOL,
-            start_date=SPY_TRADING_CALENDAR_START,
+        dates = fetch_nyse_sessions(
+            start_date=NYSE_CALENDAR_START,
             end_date=args.end_date,
         )
-        dates = extract_trading_dates(rows)
         frame = derive_trading_days(dates)
         result = validate_trading_days(frame)
-    except (ConfigurationError, TiingoError, ValueError) as exc:
+    except (ConfigurationError, NyseCalendarError, ValueError) as exc:
         print(f"FAILED: {exc}")
         return 1
 
@@ -170,9 +192,8 @@ def main() -> int:
             print(f"- {failure}")
         return 1
 
-    # Focus rows from the in-memory frame
     print("\n--- Focus derived rows ---")
-    for target in (date(1993, 1, 29), frame.iloc[-1]["date"]):
+    for target in (date(1957, 1, 2), date(1993, 1, 29), frame.iloc[-1]["date"]):
         match = frame.loc[frame["date"] == target]
         if not match.empty:
             print(_fmt_row(match.iloc[0]))
@@ -181,9 +202,16 @@ def main() -> int:
         print("\nSkipping PostgreSQL write (--skip-db).")
         return 0
 
+    if not args.replace:
+        print(
+            "\nRefusing to write without --replace after calendar source change. "
+            "Pass --replace to TRUNCATE trading_days and reload."
+        )
+        return 1
+
     try:
-        written = upsert_trading_days(frame)
-        print(f"\nUpserted rows:                 {written}")
+        written = upsert_trading_days(frame, replace=True)
+        print(f"\nReplaced + upserted rows:      {written}")
         _print_db_verification()
     except Exception as exc:
         print(f"DATABASE FAILED: {exc}")

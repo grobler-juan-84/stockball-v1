@@ -51,3 +51,7 @@ Corrected derivation so `trading_day_of_year` is null throughout 1993 (valid fro
 ## Step 12 — Commit and push trading_days V1
 
 Committed and pushed `trading_days` V1 work to GitHub (`1da1cdc`), including Tiingo fetch/derive/validate, Alembic migration, PostgreSQL upsert loader, tests, and project-steps rule. Secrets in `.env.local` were not committed.
+
+## Step 13 — Switch trading_days to NYSE calendar V2
+
+Replaced Tiingo SPY calendar source with `pandas_market_calendars` NYSE sessions from 1957-01-01 (after `exchange_calendars` failed 1950s holiday checks). Truncated and reloaded `trading_days`, removed SPY partial-history nulls, and updated docs/tests.

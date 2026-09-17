@@ -9,7 +9,7 @@ import pandas as pd
 
 from moneyball.transforms.trading_days import TRADING_DAYS_COLUMNS
 
-# Always-required non-null fields (counters / links may be null).
+# Always-required non-null fields (period distances / adjacency links may be null).
 REQUIRED_NON_NULL = [
     c
     for c in TRADING_DAYS_COLUMNS
@@ -18,8 +18,6 @@ REQUIRED_NON_NULL = [
         "prev_trading_date",
         "next_trading_date",
         "days_to_month_end",
-        "trading_day_of_month",
-        "trading_day_of_year",
     }
 ]
 
@@ -263,14 +261,6 @@ def validate_trading_days(frame: pd.DataFrame) -> TradingDaysValidationResult:
     tdom_ok = True
     for key, group in frame.groupby(ym, sort=False):
         values = list(group["trading_day_of_month"])
-        if key == (1993, 1):
-            if not all(_is_na(v) for v in values):
-                tdom_ok = False
-                failures.append(
-                    "January 1993 trading_day_of_month must be null (partial history)."
-                )
-                break
-            continue
         if any(_is_na(v) for v in values):
             tdom_ok = False
             failures.append(f"trading_day_of_month has unexpected nulls in {key}.")
@@ -285,14 +275,6 @@ def validate_trading_days(frame: pd.DataFrame) -> TradingDaysValidationResult:
     tdoy_ok = True
     for year, group in frame.groupby("year", sort=False):
         values = list(group["trading_day_of_year"])
-        if int(year) == 1993:
-            if not all(_is_na(v) for v in values):
-                tdoy_ok = False
-                failures.append(
-                    "All of 1993 trading_day_of_year must be null (partial SPY year)."
-                )
-                break
-            continue
         if any(_is_na(v) for v in values):
             tdoy_ok = False
             failures.append(f"trading_day_of_year has unexpected nulls in {year}.")
@@ -305,7 +287,7 @@ def validate_trading_days(frame: pd.DataFrame) -> TradingDaysValidationResult:
             break
 
     sample_keys = [
-        (1993, 1),
+        (1957, 1),
         (2000, 1),
         (2020, 3),
         (2024, 12),

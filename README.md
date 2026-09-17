@@ -78,19 +78,19 @@ pytest
 
 ---
 
-## Pipeline commands (stubs)
-
-These entry points exist; data fetching and schema population are not implemented yet.
+## Pipeline commands
 
 | Command | Purpose |
 | ------- | ------- |
-| `python scripts/build_database.py` | Full rebuild from source data |
-| `python scripts/update_database.py` | Incremental update |
-| `python scripts/validate_database.py` | Integrity / quality checks |
+| `python scripts/verify_nyse_calendar.py` | Verify NYSE session coverage (1957+) |
+| `python scripts/build_trading_days.py --replace` | Rebuild `trading_days` from NYSE calendar |
+| `python scripts/build_database.py` | Full rebuild stub (not implemented) |
+| `python scripts/update_database.py` | Incremental update stub |
+| `python scripts/validate_database.py` | Integrity / quality checks stub |
 | `python scripts/reset_database.py` | Destructive reset (intentionally disabled) |
 
 ---
 
 ## Stack (initial)
 
-Python · PostgreSQL · SQLAlchemy · Alembic · pandas · NumPy · python-dotenv · pytest
+Python · PostgreSQL · SQLAlchemy · Alembic · pandas · NumPy · pandas_market_calendars · python-dotenv · pytest

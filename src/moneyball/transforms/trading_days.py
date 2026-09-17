@@ -25,10 +25,6 @@ TRADING_DAYS_COLUMNS = [
     "next_trading_date",
 ]
 
-# SPY listing begins 1993-01-29: incomplete month/year history at the start.
-PARTIAL_HISTORY_YEAR_MONTH = (1993, 1)
-PARTIAL_HISTORY_YEAR = 1993
-
 
 def _quarter(d: date) -> int:
     return (d.month - 1) // 3 + 1
@@ -36,7 +32,7 @@ def _quarter(d: date) -> int:
 
 def derive_trading_days(trading_dates: Sequence[date]) -> pd.DataFrame:
     """
-    Build the V1 ``trading_days`` table from ordered Tiingo trading dates.
+    Build the ``trading_days`` table from ordered exchange trading dates.
 
     Calendar fields (weekday, month, quarter, year, day_of_month, week_of_year)
     come from the civil calendar. Sequence fields use the trading-day list itself.
@@ -49,10 +45,6 @@ def derive_trading_days(trading_dates: Sequence[date]) -> pd.DataFrame:
     ``days_to_month_end`` is remaining trading days after the current date before
     the established month-end trading day. If that month-end cannot be established
     (no later trading day in a subsequent month), the value is null.
-
-    January 1993 leaves ``trading_day_of_month`` null (valid from February 1993).
-    All of 1993 leaves ``trading_day_of_year`` null (valid from January 1994),
-    because SPY does not cover earlier 1993 sessions.
     """
     if len(trading_dates) == 0:
         raise ValueError("Cannot derive trading_days from an empty date list.")
@@ -97,22 +89,16 @@ def derive_trading_days(trading_dates: Sequence[date]) -> pd.DataFrame:
         else:
             days_to_month_end.append(end_i - i)
 
-    trading_day_of_month: list[int | None] = []
+    trading_day_of_month: list[int] = []
     month_counters: dict[tuple[int, int], int] = {}
     for d in dates:
         key = (d.year, d.month)
-        if key == PARTIAL_HISTORY_YEAR_MONTH:
-            trading_day_of_month.append(None)
-            continue
         month_counters[key] = month_counters.get(key, 0) + 1
         trading_day_of_month.append(month_counters[key])
 
-    trading_day_of_year: list[int | None] = []
+    trading_day_of_year: list[int] = []
     year_counters: dict[int, int] = {}
     for d in dates:
-        if d.year == PARTIAL_HISTORY_YEAR:
-            trading_day_of_year.append(None)
-            continue
         year_counters[d.year] = year_counters.get(d.year, 0) + 1
         trading_day_of_year.append(year_counters[d.year])
 
@@ -125,13 +111,13 @@ def derive_trading_days(trading_dates: Sequence[date]) -> pd.DataFrame:
             "year": [d.year for d in dates],
             "day_of_month": [d.day for d in dates],
             "week_of_year": [d.isocalendar().week for d in dates],
+            "trading_day_of_month": trading_day_of_month,
+            "trading_day_of_year": trading_day_of_year,
             "is_month_end": is_month_end,
             "is_quarter_end": is_quarter_end,
             "is_year_end": is_year_end,
         }
     )
-    frame["trading_day_of_month"] = pd.Series(trading_day_of_month, dtype=object)
-    frame["trading_day_of_year"] = pd.Series(trading_day_of_year, dtype=object)
     frame["days_to_month_end"] = pd.Series(days_to_month_end, dtype=object)
     frame["prev_trading_date"] = pd.Series(prev_dates, dtype=object)
     frame["next_trading_date"] = pd.Series(next_dates, dtype=object)

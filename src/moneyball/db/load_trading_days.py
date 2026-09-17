@@ -1,10 +1,11 @@
-"""Load derived trading_days rows into PostgreSQL (idempotent upsert)."""
+"""Load derived trading_days rows into PostgreSQL (idempotent upsert / replace)."""
 
 from __future__ import annotations
 
 from typing import Any
 
 import pandas as pd
+from sqlalchemy import text
 from sqlalchemy.dialects.postgresql import insert
 
 from moneyball.db import session_scope
@@ -26,24 +27,30 @@ def _row_to_record(row: pd.Series) -> dict[str, Any]:
     return record
 
 
-def upsert_trading_days(frame: pd.DataFrame) -> int:
+def upsert_trading_days(frame: pd.DataFrame, *, replace: bool = False) -> int:
     """
     Upsert validated trading_days rows.
 
-    Uses PostgreSQL ``ON CONFLICT (date) DO UPDATE`` so reruns are idempotent.
-    Returns the number of rows submitted for upsert.
+    When ``replace`` is True, truncate ``trading_days`` in the same transaction
+    before inserting so the table matches the derived dataset exactly.
+
+    Uses PostgreSQL ``ON CONFLICT (date) DO UPDATE`` so non-replace reruns remain
+    idempotent. Returns the number of rows submitted for upsert.
     """
     if list(frame.columns) != TRADING_DAYS_COLUMNS:
         raise ValueError(
             f"Unexpected trading_days columns: {list(frame.columns)}"
         )
-    if frame.empty:
+    if frame.empty and not replace:
         return 0
 
     records = [_row_to_record(frame.iloc[i]) for i in range(len(frame))]
     update_cols = [c for c in TRADING_DAYS_COLUMNS if c != "date"]
 
     with session_scope() as session:
+        if replace:
+            session.execute(text("TRUNCATE TABLE trading_days"))
+
         for start in range(0, len(records), UPSERT_BATCH_SIZE):
             batch = records[start : start + UPSERT_BATCH_SIZE]
             stmt = insert(TradingDay).values(batch)

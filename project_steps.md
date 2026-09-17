@@ -55,3 +55,7 @@ Committed and pushed `trading_days` V1 work to GitHub (`1da1cdc`), including Tii
 ## Step 13 — Switch trading_days to NYSE calendar V2
 
 Replaced Tiingo SPY calendar source with `pandas_market_calendars` NYSE sessions from 1957-01-01 (after `exchange_calendars` failed 1950s holiday checks). Truncated and reloaded `trading_days`, removed SPY partial-history nulls, and updated docs/tests.
+
+## Step 14 — Commit and push trading_days V2
+
+Committed and pushed the NYSE calendar switch to GitHub (`a9664af`), including provider, verification script, replace-mode loader, docs, and tests. Secrets in `.env.local` were not committed.
